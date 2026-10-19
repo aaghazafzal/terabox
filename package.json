@@ -1,0 +1,28 @@
+{
+  "name": "terabox-cloud-resolver",
+  "version": "1.0.0",
+  "description": "High-Performance TeraBox Full-Length Video Stream Resolver & HLS M3U8 Generator",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "terabox",
+    "video-streaming",
+    "hls",
+    "m3u8",
+    "cloudflare-workers",
+    "stream-proxy"
+  ],
+  "author": "aaghazafzal",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

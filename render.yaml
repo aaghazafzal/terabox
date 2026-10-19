@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: terabox-resolver
+    env: node
+    plan: free
+    region: oregon
+    buildCommand: npm install
+    startCommand: npm start
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: WORKER_URL
+        value: https://terabox-player-api.cinemahubapi.workers.dev
+      - key: TERABOX_COOKIE
+        sync: false
