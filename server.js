@@ -18,7 +18,7 @@ const { ProxyAgent, fetch: uFetch } = require('undici');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DEFAULT_COOKIE = process.env.TERABOX_COOKIE || '';
-const DEFAULT_WORKER_URL = process.env.WORKER_URL || 'https://terabox-player-api.cinemahubapi.workers.dev';
+const DEFAULT_WORKER_URL = process.env.WORKER_URL || 'https://terabox-player-api.onlineplayer.workers.dev';
 const DEFAULT_PROXY = process.env.HTTP_PROXY || process.env.PROXY_URL || '';
 
 // Proxy Pool Parser (supports comma, semicolon, or newline separated URLs)
