@@ -129,12 +129,22 @@ async function resolveTeraBoxStream(surl, options = {}) {
     throw new Error("Missing TeraBox cookie (ndus). Please set TERABOX_COOKIE environment variable or pass 'cookie' parameter.");
   }
 
-  const wapDomains = [
-    `https://www.terabox.app/wap/share/filelist?surl=${surl}`,
-    `https://dm.terabox.app/wap/share/filelist?surl=${surl}`,
-    `https://www.1024terabox.com/wap/share/filelist?surl=${surl}`,
-    `https://dm.1024terabox.com/wap/share/filelist?surl=${surl}`
-  ];
+  const surlVariations = [surl];
+  if (surl.startsWith('1')) surlVariations.push(surl.slice(1));
+  else surlVariations.push('1' + surl);
+
+  const wapDomains = [];
+  for (const s of surlVariations) {
+    wapDomains.push(
+      `https://dm.1024tera.com/wap/share/filelist?surl=${s}`,
+      `https://www.1024tera.com/wap/share/filelist?surl=${s}`,
+      `https://dm.terabox.app/wap/share/filelist?surl=${s}`,
+      `https://www.terabox.app/wap/share/filelist?surl=${s}`,
+      `https://www.terabox.com/wap/share/filelist?surl=${s}`,
+      `https://dm.1024terabox.com/wap/share/filelist?surl=${s}`,
+      `https://www.1024terabox.com/wap/share/filelist?surl=${s}`
+    );
+  }
 
   let state = null;
   let lastError = null;
@@ -285,6 +295,68 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     workerUrl: DEFAULT_WORKER_URL,
     hasDefaultCookie: Boolean(DEFAULT_COOKIE)
+  });
+});
+
+// Diagnostic Endpoint to test cookies and domain responses
+app.get('/debug', async (req, res) => {
+  const surl = extractSurl(req.query.url || req.query.surl || 'tJBeCdKzihYl1knxJTorZQ');
+  const cookie = sanitizeCookie(req.query.cookie || DEFAULT_COOKIE);
+
+  const quotaDomains = [
+    'https://www.terabox.app/api/quota',
+    'https://dm.1024tera.com/api/quota',
+    'https://www.terabox.com/api/quota'
+  ];
+  const quotaResults = {};
+  for (const qd of quotaDomains) {
+    try {
+      const qr = await fetch(qd, { headers: { Cookie: cookie, 'User-Agent': 'Mozilla/5.0' } });
+      quotaResults[qd] = await qr.json();
+    } catch (e) {
+      quotaResults[qd] = { error: e.message };
+    }
+  }
+
+  const testDomains = [
+    `https://dm.1024tera.com/wap/share/filelist?surl=${surl}`,
+    `https://www.1024tera.com/wap/share/filelist?surl=${surl}`,
+    `https://dm.terabox.app/wap/share/filelist?surl=${surl}`,
+    `https://www.terabox.app/wap/share/filelist?surl=${surl}`
+  ];
+  const wapResults = {};
+  for (const wd of testDomains) {
+    try {
+      const wr = await fetch(wd, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15',
+          'Cookie': cookie
+        }
+      });
+      const txt = await wr.text();
+      const m = txt.match(/window\.__INITIAL_STATE__\s*=\s*(\{.*?\});/s);
+      if (m) {
+        const s = JSON.parse(m[1]);
+        wapResults[wd] = {
+          status: wr.status,
+          files: s.share?.fileList?.length || 0,
+          shareid: s.share?.shareInfo?.shareid || 0,
+          filename: s.share?.fileList?.[0]?.server_filename || 'none'
+        };
+      } else {
+        wapResults[wd] = { status: wr.status, hasInitialState: false };
+      }
+    } catch (e) {
+      wapResults[wd] = { error: e.message };
+    }
+  }
+
+  res.json({
+    surl,
+    hasCookie: Boolean(cookie),
+    cookiePrefix: cookie ? cookie.slice(0, 15) + '...' : 'none',
+    quotaResults,
+    wapResults
   });
 });
 
