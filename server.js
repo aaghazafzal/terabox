@@ -340,6 +340,7 @@ app.get('/health', (req, res) => {
 app.get('/debug', async (req, res) => {
   const surl = extractSurl(req.query.url || req.query.surl || 'tJBeCdKzihYl1knxJTorZQ');
   const cookie = sanitizeCookie(req.query.cookie || DEFAULT_COOKIE);
+  const doFetch = getFetchClient(req.query.proxy);
 
   const quotaDomains = [
     'https://www.terabox.app/api/quota',
@@ -349,7 +350,7 @@ app.get('/debug', async (req, res) => {
   const quotaResults = {};
   for (const qd of quotaDomains) {
     try {
-      const qr = await fetch(qd, { headers: { Cookie: cookie, 'User-Agent': 'Mozilla/5.0' } });
+      const qr = await doFetch(qd, { headers: { Cookie: cookie, 'User-Agent': 'Mozilla/5.0' } });
       quotaResults[qd] = await qr.json();
     } catch (e) {
       quotaResults[qd] = { error: e.message };
@@ -365,7 +366,7 @@ app.get('/debug', async (req, res) => {
   const wapResults = {};
   for (const wd of testDomains) {
     try {
-      const wr = await fetch(wd, {
+      const wr = await doFetch(wd, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15',
           'Cookie': cookie
@@ -421,11 +422,13 @@ app.all('/resolve', async (req, res) => {
     const workerUrl = req.query.worker || req.body.workerUrl || DEFAULT_WORKER_URL;
     const cookie = req.headers['x-terabox-cookie'] || req.query.cookie || req.body.cookie || DEFAULT_COOKIE;
     const quality = req.query.quality || req.body.quality || 'M3U8_AUTO_480';
+    const proxy = req.query.proxy || req.body.proxy;
 
     const { metadata } = await resolveTeraBoxStream(surl, {
       cookie,
       workerUrl,
       quality,
+      proxy,
       reqHost: req.get('host'),
       reqProtocol: req.protocol
     });
