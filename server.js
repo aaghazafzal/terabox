@@ -365,7 +365,7 @@ app.get('/debug', async (req, res) => {
           filename: s.share?.fileList?.[0]?.server_filename || 'none'
         };
       } else {
-        wapResults[wd] = { status: wr.status, hasInitialState: false };
+        wapResults[wd] = { status: wr.status, hasInitialState: false, len: txt.length, htmlSnippet: txt.slice(0, 300) };
       }
     } catch (e) {
       wapResults[wd] = { error: e.message };
