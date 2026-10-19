@@ -13,11 +13,26 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const { ProxyAgent, fetch: uFetch } = require('undici');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DEFAULT_COOKIE = process.env.TERABOX_COOKIE || '';
 const DEFAULT_WORKER_URL = process.env.WORKER_URL || 'https://terabox-player-api.cinemahubapi.workers.dev';
+const DEFAULT_PROXY = process.env.HTTP_PROXY || process.env.PROXY_URL || '';
+
+function getFetchClient(proxyOverride) {
+  const proxy = proxyOverride || DEFAULT_PROXY;
+  if (proxy && proxy.trim()) {
+    try {
+      const agent = new ProxyAgent(proxy.trim());
+      return (url, opts = {}) => uFetch(url, { ...opts, dispatcher: agent });
+    } catch (e) {
+      console.warn('Invalid proxy configuration:', e.message);
+    }
+  }
+  return fetch;
+}
 
 app.use(cors());
 app.use(express.json());
@@ -171,12 +186,13 @@ async function resolveTeraBoxStream(surl, options = {}) {
     );
   }
 
+  const doFetch = getFetchClient(options.proxy);
   let state = null;
   let lastError = null;
 
   for (const wapUrl of wapDomains) {
     try {
-      const res = await fetch(wapUrl, {
+      const res = await doFetch(wapUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
           'Cookie': cookie,
@@ -227,7 +243,7 @@ async function resolveTeraBoxStream(surl, options = {}) {
 
   const combinedCookie = `${cookie}; BDCLND=${decodeURIComponent(share.randsk || '')};`;
 
-  const streamRes = await fetch(streamUrl.toString(), {
+  const streamRes = await doFetch(streamUrl.toString(), {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
       'Cookie': combinedCookie,
