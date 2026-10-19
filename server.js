@@ -21,14 +21,60 @@ const DEFAULT_COOKIE = process.env.TERABOX_COOKIE || '';
 const DEFAULT_WORKER_URL = process.env.WORKER_URL || 'https://terabox-player-api.cinemahubapi.workers.dev';
 const DEFAULT_PROXY = process.env.HTTP_PROXY || process.env.PROXY_URL || '';
 
-function getFetchClient(proxyOverride) {
-  const proxy = proxyOverride || DEFAULT_PROXY;
-  if (proxy && proxy.trim()) {
+// Proxy Pool Parser (supports comma, semicolon, or newline separated URLs)
+function getProxyList() {
+  const raw = process.env.PROXY_POOL || DEFAULT_PROXY || '';
+  return raw.split(/[\r\n,;]+/).map(p => p.trim()).filter(Boolean);
+}
+
+// Cookie Pool Parser (supports newline or ||| separated cookie strings)
+function getCookieList() {
+  const raw = process.env.COOKIE_POOL || DEFAULT_COOKIE || '';
+  return raw.split(/[\r\n|]+/).map(c => c.trim()).filter(Boolean);
+}
+
+let proxyCounter = 0;
+let cookieCounter = 0;
+
+function getNextProxy(override) {
+  if (override && override.trim()) return override.trim();
+  const list = getProxyList();
+  if (list.length === 0) return '';
+  const p = list[proxyCounter % list.length];
+  proxyCounter = (proxyCounter + 1) % list.length;
+  return p;
+}
+
+function getNextCookie(override) {
+  if (override && override.trim()) return sanitizeCookie(override);
+  const list = getCookieList();
+  if (list.length === 0) return sanitizeCookie(DEFAULT_COOKIE);
+  const c = list[cookieCounter % list.length];
+  cookieCounter = (cookieCounter + 1) % list.length;
+  return sanitizeCookie(c);
+}
+
+// Connection Pool: Cache ProxyAgent instances to reuse sockets
+const proxyAgentMap = new Map();
+function getAgentForProxy(proxyUrl) {
+  if (!proxyUrl) return null;
+  if (!proxyAgentMap.has(proxyUrl)) {
     try {
-      const agent = new ProxyAgent(proxy.trim());
-      return (url, opts = {}) => uFetch(url, { ...opts, dispatcher: agent });
+      proxyAgentMap.set(proxyUrl, new ProxyAgent(proxyUrl));
     } catch (e) {
-      console.warn('Invalid proxy configuration:', e.message);
+      console.warn('Failed to create ProxyAgent for:', proxyUrl, e.message);
+      return null;
+    }
+  }
+  return proxyAgentMap.get(proxyUrl);
+}
+
+function getFetchClient(proxyOverride) {
+  const proxy = getNextProxy(proxyOverride);
+  if (proxy) {
+    const agent = getAgentForProxy(proxy);
+    if (agent) {
+      return (url, opts = {}) => uFetch(url, { ...opts, dispatcher: agent });
     }
   }
   return fetch;
@@ -160,13 +206,13 @@ function sanitizeCookie(cookieStr) {
  * Core Resolver: Resolves TeraBox share URL and fetches genuine full-length M3U8
  */
 async function resolveTeraBoxStream(surl, options = {}) {
-  const cookie = sanitizeCookie(options.cookie || DEFAULT_COOKIE);
+  const cookie = getNextCookie(options.cookie);
   const workerUrl = (options.workerUrl || DEFAULT_WORKER_URL || '').replace(/\/$/, '');
   const reqHost = options.reqHost || `localhost:${PORT}`;
   const reqProtocol = options.reqProtocol || 'http';
 
   if (!cookie) {
-    throw new Error("Missing TeraBox cookie (ndus). Please set TERABOX_COOKIE environment variable or pass 'cookie' parameter.");
+    throw new Error("Missing TeraBox cookie (ndus). Please set TERABOX_COOKIE or COOKIE_POOL environment variable or pass 'cookie' parameter.");
   }
 
   const surlVariations = [surl];
@@ -333,6 +379,27 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     workerUrl: DEFAULT_WORKER_URL,
     hasDefaultCookie: Boolean(DEFAULT_COOKIE)
+  });
+});
+
+app.get('/pool-status', (req, res) => {
+  const proxies = getProxyList();
+  const cookies = getCookieList();
+  res.json({
+    status: 'ok',
+    proxiesCount: proxies.length,
+    proxiesConfigured: proxies.map(p => {
+      try {
+        const u = new URL(p);
+        return `${u.protocol}//${u.host}`;
+      } catch (e) {
+        return 'configured';
+      }
+    }),
+    cookiesCount: cookies.length,
+    workerTarget: DEFAULT_WORKER_URL,
+    uptimeSeconds: Math.floor(process.uptime()),
+    cacheEntries: memoryCache.size
   });
 });
 
