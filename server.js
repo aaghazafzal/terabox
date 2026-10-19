@@ -563,8 +563,9 @@ app.get('/', (req, res) => {
 </html>`);
 });
 
-app.listen(PORT, () => {
-  console.log(`[TeraBox Cloud Resolver] Running on port ${PORT}`);
+const HOST = '0.0.0.0';
+app.listen(PORT, HOST, () => {
+  console.log(`[TeraBox Cloud Resolver] Running on http://${HOST}:${PORT}`);
   console.log(`[TeraBox Cloud Resolver] Cloudflare Worker Target: ${DEFAULT_WORKER_URL}`);
   console.log(`[TeraBox Cloud Resolver] Cookie Configured: ${DEFAULT_COOKIE ? 'YES (Active)' : 'NO (Pass via query or env)'}`);
 });
