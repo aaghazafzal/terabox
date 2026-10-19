@@ -105,6 +105,31 @@ function formatSize(bytes) {
   return `${(b / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
 }
 
+function parseInitialState(html) {
+  const token = 'window.__INITIAL_STATE__';
+  const start = html.indexOf(token);
+  if (start === -1) return null;
+  const jsonStart = html.indexOf('{', start);
+  if (jsonStart === -1) return null;
+  let depth = 0;
+  let end = jsonStart;
+  for (let i = jsonStart; i < html.length; i++) {
+    if (html[i] === '{') depth++;
+    else if (html[i] === '}') {
+      depth--;
+      if (depth === 0) {
+        end = i + 1;
+        break;
+      }
+    }
+  }
+  try {
+    return JSON.parse(html.slice(jsonStart, end));
+  } catch {
+    return null;
+  }
+}
+
 function sanitizeCookie(cookieStr) {
   if (!cookieStr) return '';
   let clean = cookieStr.trim();
@@ -169,13 +194,10 @@ async function resolveTeraBoxStream(surl, options = {}) {
         throw new Error('Link is invalid or has expired (TeraBox Error 404).');
       }
 
-      const match = html.match(/window\.__INITIAL_STATE__\s*=\s*(\{.*?\});/s);
-      if (match && match[1]) {
-        const parsed = JSON.parse(match[1]);
-        if (parsed.share && parsed.share.shareInfo && parsed.share.fileList && parsed.share.fileList.length > 0) {
-          state = parsed;
-          break;
-        }
+      const parsed = parseInitialState(html);
+      if (parsed && parsed.share && parsed.share.fileList && parsed.share.fileList.length > 0) {
+        state = parsed;
+        break;
       }
     } catch (err) {
       lastError = err;
@@ -334,9 +356,8 @@ app.get('/debug', async (req, res) => {
         }
       });
       const txt = await wr.text();
-      const m = txt.match(/window\.__INITIAL_STATE__\s*=\s*(\{.*?\});/s);
-      if (m) {
-        const s = JSON.parse(m[1]);
+      const s = parseInitialState(txt);
+      if (s) {
         wapResults[wd] = {
           status: wr.status,
           files: s.share?.fileList?.length || 0,
