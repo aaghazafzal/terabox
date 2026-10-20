@@ -84,6 +84,29 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// ==========================================
+// Security: Protect Micro-Resolver from direct public access / scraping
+// Only Cloudflare Worker with valid secret can access internal routes
+// ==========================================
+const RESOLVER_SECRET = process.env.RESOLVER_SECRET || 'op_sec_7a9f4e2d8c1b6a5e0f3d9b8a4c2e1f7a';
+
+app.use((req, res, next) => {
+  // Always allow health checks for Render monitoring and the 8-minute self-keepalive ping
+  if (req.path === '/health') {
+    return next();
+  }
+
+  const incomingSecret = req.headers['x-resolver-secret'] || req.query.secret;
+  if (!incomingSecret || incomingSecret !== RESOLVER_SECRET) {
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized: Direct access to this micro-resolver is restricted. Please access via https://onlineplayer.site'
+    });
+  }
+
+  next();
+});
+
 // In-memory cache for ultra-fast repetitive hits (TTL: 4 hours)
 const memoryCache = new Map();
 const CACHE_TTL_MS = (parseInt(process.env.CACHE_TTL_SECONDS, 10) || 14400) * 1000;
