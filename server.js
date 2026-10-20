@@ -747,4 +747,25 @@ app.listen(PORT, HOST, () => {
   console.log(`[TeraBox Cloud Resolver] Running on http://${HOST}:${PORT}`);
   console.log(`[TeraBox Cloud Resolver] Cloudflare Worker Target: ${DEFAULT_WORKER_URL}`);
   console.log(`[TeraBox Cloud Resolver] Cookie Configured: ${DEFAULT_COOKIE ? 'YES (Active)' : 'NO (Pass via query or env)'}`);
+
+  // ==========================================
+  // ⏱️ Built-in Render Keep-Alive Auto-Pinger (Every 8 Minutes)
+  // Keeps Render free tier awake 24/7 so it never sleeps
+  // ==========================================
+  const PING_INTERVAL_MS = 8 * 60 * 1000; // 8 minutes
+  const SELF_URL = process.env.RENDER_EXTERNAL_URL || 'https://terabox-resolver-csit.onrender.com';
+
+  setInterval(async () => {
+    try {
+      const pingUrl = `${SELF_URL.replace(/\/$/, '')}/health`;
+      const res = await fetch(pingUrl, {
+        headers: { 'User-Agent': 'OnlinePlayer-KeepAlive/2.0' }
+      });
+      console.log(`[Keep-Alive Ping] ${new Date().toISOString()} -> Status: ${res.status}`);
+    } catch (err) {
+      console.warn(`[Keep-Alive Ping] Ping failed: ${err.message}`);
+    }
+  }, PING_INTERVAL_MS);
+
+  console.log(`[Keep-Alive Ping] Initialized: Self-pinging ${SELF_URL}/health every 8 minutes`);
 });
